@@ -1,0 +1,35 @@
+# ── LLM Configuration ─────────────────────────────────────────────────────────
+llm:
+  primary_provider: gemini                # "gemini" | "groq"
+  fallback_provider: groq
+  gemini_model: gemini-1.5-flash          # Free tier model
+  groq_model: llama-3.3-70b-versatile    # Free tier model
+  max_tokens: 4096
+  temperature: 0.1                        # Low = deterministic extraction
+  retry_attempts: 3
+  retry_delay_seconds: 2
+
+# ── Output Configuration ──────────────────────────────────────────────────────
+output:
+  language: python
+  folder: ./output
+  file_suffix: _sdk.py                    # e.g. jsonplaceholder_sdk.py
+
+# ── Scraper Configuration ─────────────────────────────────────────────────────
+scraper:
+  timeout_seconds: 30
+  user_agent: "SmartAPITool/1.0 (+https://github.com/Prathamesh07-stack/smart-api-tool)"
+  max_pages: 10                           # Max pages to follow for pagination
+  default_crawl_delay_seconds: 1         # Polite crawl delay between requests
+  playwright_timeout_ms: 15000           # Timeout for JS-rendered pages
+
+# ── Logging Configuration ─────────────────────────────────────────────────────
+logging:
+  level: INFO                             # DEBUG | INFO | WARNING | ERROR
+  log_to_file: true
+  log_file_path: ./logs/smart_api_tool.log
+  format: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+
+# ── Async / Batch Configuration ───────────────────────────────────────────────
+async:
+  max_concurrent: 3                       # Semaphore limit for batch mode
