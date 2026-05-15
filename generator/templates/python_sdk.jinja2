@@ -50,10 +50,10 @@ class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') }
         if {{ param.name | safe_param_name }} is None:
             raise ValueError("Parameter '{{ param.name }}' is required for {{ endpoint.method }} {{ endpoint.path }}")
         if not isinstance({{ param.name | safe_param_name }}, {{ param.type | to_python_type }}):
-            raise TypeError(f"Parameter '{{ param.name }}' must be of type {{ param.type | to_python_type }}")
+            raise TypeError("Parameter '{{ param.name }}' must be of type {{ param.type | to_python_type }}")
         {% else %}
         if {{ param.name | safe_param_name }} is not None and not isinstance({{ param.name | safe_param_name }}, {{ param.type | to_python_type }}):
-            raise TypeError(f"Parameter '{{ param.name }}' must be of type {{ param.type | to_python_type }}")
+            raise TypeError("Parameter '{{ param.name }}' must be of type {{ param.type | to_python_type }}")
         {% endif %}
         {% endfor %}
 

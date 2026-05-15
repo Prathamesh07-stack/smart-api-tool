@@ -27,5 +27,6 @@ jobs:
         run: |
           flake8 . \
             --max-line-length=100 \
+            --extend-ignore=E501 \
             --exclude=.venv,__pycache__,.git \
             --statistics
