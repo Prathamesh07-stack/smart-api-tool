@@ -1,0 +1,15 @@
+title: JSONPlaceholder
+base_url: https://jsonplaceholder.typicode.com
+endpoints:
+  - path: /posts
+    method: GET
+  - path: /posts
+    method: POST
+  - path: /posts/{id}
+    method: GET
+  - path: /posts/{id}
+    method: PUT
+  - path: /posts/{id}
+    method: DELETE
+  - path: /users
+    method: GET
