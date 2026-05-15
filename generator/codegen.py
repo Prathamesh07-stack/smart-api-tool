@@ -80,6 +80,7 @@ def generate_sdk(schema: APISchema, output_dir: str = "output") -> str:
 
     import subprocess
     try:
+        subprocess.run(["autoflake", "--in-place", "--remove-all-unused-imports", output_path], check=True)
         subprocess.run(["black", "-q", "--line-length=79", output_path], check=True)
     except Exception as e:
         logger.warning(f"Auto-formatting failed for {output_path}: {e}")

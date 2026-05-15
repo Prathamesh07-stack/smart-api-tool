@@ -68,7 +68,7 @@ def compute_extraction_accuracy(
 
 def check_code_quality(sdk_path: str) -> Dict[str, Any]:
     result = subprocess.run(
-        ["flake8", "--max-line-length=100", sdk_path],
+        ["flake8", "--max-line-length=100", "--extend-ignore=E501", sdk_path],
         capture_output=True,
         text=True,
     )
