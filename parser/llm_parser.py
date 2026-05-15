@@ -13,6 +13,8 @@ SYSTEM_PROMPT = """
 You are an expert API integration engineer. Extract the API specification
 from the provided documentation text and return it as a structured JSON object.
 
+CRITICAL INSTRUCTION: Carefully read the text to find ALL API resources or routes mentioned (e.g., /posts, /users, /comments, etc). Even if the documentation only briefly lists a route, you MUST infer the standard REST CRUD endpoints for it. For example, if you see '/users', assume there is a 'GET /users' and 'GET /users/{id}'. Do not leave out any routes mentioned on the page.
+
 Your output MUST strictly match this exact JSON structure:
 {
     "title": "API Name",
@@ -39,8 +41,18 @@ Your output MUST strictly match this exact JSON structure:
             "response_description": "Returns user object"
         }
     ],
-    "extraction_notes": ["Any assumptions made"]
+    "extraction_notes": ["Explicitly document ANY assumptions or inferred endpoints here"]
 }
+
+--- FEW-SHOT EXAMPLE ---
+BAD INPUT TEXT:
+"Our API has /users, /posts, and /comments."
+
+EXPECTED OUTPUT LOGIC:
+Even though the text doesn't explicitly say "GET /users", you MUST infer standard CRUD endpoints.
+You should generate: GET /users, POST /users, GET /posts, POST /posts, GET /comments, etc.
+Any endpoints you infer that were not explicitly detailed MUST be logged in 'extraction_notes'.
+------------------------
 
 Return ONLY valid JSON. Do not include markdown formatting like ```json
 or any other text before or after the JSON.
@@ -59,7 +71,10 @@ def _call_llm(prompt: str, text: str) -> str:
     if gemini_key:
         try:
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',
+                generation_config=genai.types.GenerationConfig(temperature=0.0)
+            )
             full_prompt = (
                 f"System Instructions:\n{prompt}\n\n"
                 f"User Input (Documentation):\n{text}"
@@ -81,7 +96,7 @@ def _call_llm(prompt: str, text: str) -> str:
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": text}
                 ],
-                temperature=0.1
+                temperature=0.0
             )
             return completion.choices[0].message.content or ""
         except Exception as e:
@@ -108,14 +123,33 @@ def _clean_json_string(raw: str) -> str:
 
 
 def compute_confidence(schema: APISchema, raw_text: str) -> float:
-    """Compute a simple confidence score heuristically."""
+    """Compute a strict confidence score mathematically penalizing ambiguity."""
     score = 1.0
     if not schema.endpoints:
-        score -= 0.5
+        return 0.1
+
     if not schema.base_url or schema.base_url == "https://api.example.com":
         score -= 0.2
+
     if schema.auth.type == "none" and "auth" in raw_text.lower():
         score -= 0.1
+
+    # Penalize endpoints with missing details (Ambiguity Heuristic)
+    ambiguous_endpoints = 0
+    for ep in schema.endpoints:
+        if not ep.summary or ep.summary == "Description of what it does":
+            ambiguous_endpoints += 1
+        # If path has {id} but no parameters were extracted
+        if "{" in ep.path and "}" in ep.path and not ep.parameters:
+            score -= 0.1
+        # Penalize overly generic Optional[Any] types
+        for param in ep.parameters:
+            if param.type == "Any":
+                score -= 0.05
+
+    if ambiguous_endpoints > 0:
+        score -= (0.1 * ambiguous_endpoints)
+
     return max(0.1, round(score, 2))
 
 
@@ -129,6 +163,11 @@ def parse_api_docs(text: str) -> APISchema:
         data = json.loads(clean_text)
         schema = APISchema(**data)
         schema.confidence_score = compute_confidence(schema, text)
+
+        # Trigger Fallback Heuristic if score is too low
+        if schema.confidence_score < 0.6:
+            raise ValueError(f"Confidence too low ({schema.confidence_score}). Triggering fallback.")
+
         logger.info(
             f"Parsed docs with confidence {schema.confidence_score}"
         )

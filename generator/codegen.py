@@ -78,5 +78,11 @@ def generate_sdk(schema: APISchema, output_dir: str = "output") -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered_code)
 
+    import subprocess
+    try:
+        subprocess.run(["black", "-q", "--line-length=79", output_path], check=True)
+    except Exception as e:
+        logger.warning(f"Auto-formatting failed for {output_path}: {e}")
+
     logger.info(f"SDK generated at: {output_path}")
     return output_path

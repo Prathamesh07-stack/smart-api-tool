@@ -11,6 +11,8 @@ USER_AGENT = "SmartAPITool/1.0"
 
 
 def extract_main_content(soup):
+    from markdownify import markdownify as md
+
     # Try to find the main content area using common selectors
     for selector in [
         "main",
@@ -22,13 +24,13 @@ def extract_main_content(soup):
     ]:
         element = soup.select_one(selector)
         if element:
-            return element.get_text(separator="\n", strip=True)
+            return md(str(element), heading_style="ATX").strip()
 
     # If no main area found, clean up noise tags and get everything else
     for tag in soup(["nav", "footer", "header", "script", "style", "aside"]):
         tag.decompose()
 
-    return soup.get_text(separator="\n", strip=True)
+    return md(str(soup), heading_style="ATX").strip()
 
 
 def scrape_url(url):
