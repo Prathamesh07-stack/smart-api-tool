@@ -58,6 +58,41 @@ def to_python_type(type_str: str) -> str:
     return "str"
 
 
+def generate_test_file(schema: APISchema, output_dir: str, sdk_filename: str) -> str:
+    """Generates a pytest companion file for the Python SDK."""
+    base_name = sdk_filename.replace(".py", "")
+    test_filename = f"{base_name}_tests.py"
+    output_path = os.path.abspath(os.path.join(output_dir, test_filename))
+    
+    # We assume output_dir is treated as a module package or is run directly.
+    # To keep imports simple, use the base_name directly.
+    sdk_import_path = base_name
+    
+    class_name = _class_name(schema.title) + "Client"
+
+    templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+    env = Environment(
+        loader=FileSystemLoader(templates_dir),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    env.filters["format_method_name"] = format_method_name
+
+    template = env.get_template("python_sdk_tests.jinja2")
+    rendered_code = template.render(
+        schema=schema,
+        class_name=class_name,
+        sdk_import_path=sdk_import_path,
+        test_module_name=test_filename,
+    )
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(rendered_code)
+
+    logger.info("Test companion saved: %s", output_path)
+    return output_path
+
+
 def generate_sdk(
     schema: APISchema,
     output_dir: str = "output",
@@ -136,4 +171,8 @@ def generate_sdk(
             logger.warning(f"Auto-formatting failed for {output_path}: {e}")
 
     logger.info(f"SDK generated at: {output_path}")
+    
+    if language == "python":
+        generate_test_file(schema, output_dir, filename)
+        
     return output_path

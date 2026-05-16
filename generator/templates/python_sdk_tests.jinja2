@@ -1,0 +1,26 @@
+# Auto-generated test file for {{ schema.title }} SDK.
+# Add your API key (if needed) and run:
+#   pytest {{ test_module_name }} -v
+
+import pytest
+from {{ sdk_import_path }} import {{ class_name }}
+
+@pytest.fixture
+def client():
+    # TODO: add your real API key / base_url here if needed
+    return {{ class_name }}()
+
+{% for endpoint in schema.endpoints %}
+{% set method_name = endpoint.method | format_method_name(endpoint.path) %}
+{% set required_params = endpoint.parameters | selectattr("required") | list %}
+{% if required_params %}
+@pytest.mark.skip(reason="requires real credentials or sample data")
+def test_{{ method_name }}_returns_data(client):
+    pytest.skip("requires real credentials or sample data")
+{% else %}
+def test_{{ method_name }}_returns_data(client):
+    result = client.{{ method_name }}()
+    assert result is not None
+{% endif %}
+
+{% endfor %}
