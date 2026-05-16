@@ -1,58 +1,110 @@
-# Smart API Tool – SDK Generator
+# Smart API Tool – Auto-generated Python SDK from API docs
 
-> A tool that takes an API docs URL or OpenAPI spec and generates a ready-to-use Python SDK automatically.
+Smart API Tool is an autonomous, production-ready pipeline that dynamically converts static REST API documentation into fully functioning, PEP-8 compliant Python SDKs using LLM parsing, Pydantic validation, and deterministic Jinja2 code generation.
 
-## What It Does
+## Architecture
 
-1. **Scrapes** API documentation from any public URL (handles static HTML, JS-rendered pages, and multi-page docs)
-2. **Understands** the API using an LLM (Gemini primary, Groq fallback) and validates the extracted schema with Pydantic
-3. **Generates** a clean, importable Python SDK using Jinja2 templates
+![Architecture Diagram](Architecture-Diagram.png)
 
-## Quick Start
+The tool processes documentation through a 5-tier pipeline:
+1. **Scraping**: Fetches static HTML or renders JavaScript-heavy sites via Playwright, respecting `robots.txt`.
+2. **LLM Parsing**: Gemini/Groq extracts API endpoints, HTTP methods, and parameters using strict Few-Shot prompts.
+3. **Validation**: Pydantic strictly enforces the `APISchema` structure, eliminating hallucinations.
+4. **Code Generation**: A deterministic Jinja2 template maps the schema into a robust Python class.
+5. **Quality Assurance**: `autoflake` and `black` auto-format the code, ensuring 0 Code Quality issues.
+
+## Setup
 
 ```bash
-# 1. Clone & set up environment
-git clone <repo-url>
+git clone https://github.com/Prathamesh07-stack/smart-api-tool.git
 cd smart-api-tool
 
+# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
+# Install dependencies
 pip install -r requirements.txt
-playwright install chromium       # for JS-rendered docs
-
-# 2. Add your API keys
-cp .env.example .env
-# Edit .env → add GEMINI_API_KEY and/or GROQ_API_KEY
-
-# 3. Run
-python main.py --url https://jsonplaceholder.typicode.com/
-python main.py --spec path/to/swagger.yaml
-python main.py --urls url1 url2 url3   # batch mode
 ```
 
-## Project Structure
+*(Ensure you have your `.env` file populated with `GEMINI_API_KEY` and `GROQ_API_KEY`)*
 
+## Running the tool locally
+
+### Single URL (JSONPlaceholder)
+```bash
+python main.py \
+  --url https://jsonplaceholder.typicode.com/ \
+  --evaluate \
+  --smoke-test \
+  --log-level INFO
 ```
-smart-api-tool/
-├── main.py                  # CLI entry point
-├── config.yaml              # Default configuration
-├── requirements.txt
-├── .env.example
-├── scraper/                 # Web scraping + robots.txt compliance
-├── parser/                  # LLM extraction + Pydantic validation
-├── generator/               # Jinja2 SDK templates + codegen
-├── evaluation/              # Metrics, quality checks, smoke tests
-├── utils/                   # Logger and shared utilities
-├── tests/                   # Unit + integration tests
-├── output/                  # Generated SDK files (git-ignored)
-└── logs/                    # Runtime logs (git-ignored)
+**Expected Output**:
+- Logs for checking `robots.txt`, Scraping, and Parsing.
+- `Found endpoints. Confidence 1.0`
+- SDK saved to `output/jsonplaceholder_sdk.py`.
+- Full Latency Tracker report.
+- Evaluation metrics (Precision, Recall, F1).
+- Smoke test summary (e.g., `passed 6 / total 6 endpoints`).
+
+### Spec file mode (OpenAPI)
+For deterministic parsing without an LLM:
+```bash
+python main.py \
+  --spec tests/real_petstore_openapi.yaml \
+  --log-level INFO
+```
+**Expected Output**: Instant parsing of the OpenAPI schema and lightning-fast SDK generation.
+
+### Batch mode (Async Pipeline)
+```bash
+python main.py \
+  --urls https://jsonplaceholder.typicode.com/ https://docs.stripe.com/api/customers \
+  --log-level INFO
+```
+**Expected Output**: One log line per URL processing concurrently via `asyncio`, handling success/failure states seamlessly.
+
+## Running tests locally
+
+Run the entire MVP test suite (Scraper, Parser, Codegen, Evaluation):
+```bash
+PYTHONPATH=. pytest tests/ -v
+```
+*(All tests should pass natively)*
+
+Run Code Quality / Linting checks:
+```bash
+flake8 .
+```
+*(Flake8 should show absolutely no output, meaning 0 errors repository-wide)*
+
+## Running in Google Colab
+
+If you want to demo this tool in a cloud environment without setting anything up locally, open a new Google Colab notebook and run the following cells:
+
+**1. Clone and Install**
+```python
+!git clone https://github.com/Prathamesh07-stack/smart-api-tool.git
+%cd smart-api-tool
+!pip install -r requirements.txt
 ```
 
-## Configuration
+**2. Run Tests**
+```python
+!PYTHONPATH=. pytest tests/ -v
+```
+*(Expected: All tests show PASSED in the output)*
 
-Edit `config.yaml` to change LLM model, output directory, scraping timeouts, and concurrency limits.
+**3. Run the End-to-End Demo**
+```python
+# Make sure to set your API key in Colab secrets first!
+import os
+os.environ["GEMINI_API_KEY"] = "your_key_here"
 
----
-
-> **Note:** Detailed documentation is work in progress. See `docs/design.md` (coming in later issues).
+!python main.py \
+  --url https://jsonplaceholder.typicode.com/ \
+  --evaluate \
+  --smoke-test \
+  --log-level INFO
+```
+*(Expected: Structured logs, evaluation metrics, and the generated SDK file appearing in the Colab file explorer under `output/`)*
