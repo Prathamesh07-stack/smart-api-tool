@@ -63,11 +63,11 @@ def generate_test_file(schema: APISchema, output_dir: str, sdk_filename: str) ->
     base_name = sdk_filename.replace(".py", "")
     test_filename = f"{base_name}_tests.py"
     output_path = os.path.abspath(os.path.join(output_dir, test_filename))
-    
+
     # We assume output_dir is treated as a module package or is run directly.
     # To keep imports simple, use the base_name directly.
     sdk_import_path = base_name
-    
+
     class_name = _class_name(schema.title) + "Client"
 
     templates_dir = os.path.join(os.path.dirname(__file__), "templates")
@@ -88,6 +88,23 @@ def generate_test_file(schema: APISchema, output_dir: str, sdk_filename: str) ->
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered_code)
+
+    try:
+        subprocess.run(
+            [
+                "autoflake",
+                "--in-place",
+                "--remove-all-unused-imports",
+                output_path,
+            ],
+            check=True,
+        )
+        subprocess.run(
+            ["black", "-q", "--line-length=79", output_path],
+            check=True,
+        )
+    except Exception as e:
+        logger.warning(f"Auto-formatting failed for {output_path}: {e}")
 
     logger.info("Test companion saved: %s", output_path)
     return output_path
@@ -136,9 +153,7 @@ def generate_sdk(
 
     class_name = _class_name(schema.title) + "Client"
     first_method = (
-        format_method_name(
-            schema.endpoints[0].method, schema.endpoints[0].path
-        )
+        format_method_name(schema.endpoints[0].method, schema.endpoints[0].path)
         if schema.endpoints
         else ""
     )
@@ -171,8 +186,8 @@ def generate_sdk(
             logger.warning(f"Auto-formatting failed for {output_path}: {e}")
 
     logger.info(f"SDK generated at: {output_path}")
-    
+
     if language == "python":
         generate_test_file(schema, output_dir, filename)
-        
+
     return output_path
