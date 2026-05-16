@@ -9,7 +9,7 @@ import requests
 from typing import Any, Dict, Optional
 
 
-class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') }}Client:
+class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') | replace('.', '') }}Client:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
         Initialize the {{ schema.title }} client.

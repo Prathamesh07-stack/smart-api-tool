@@ -7,7 +7,7 @@ playwright==1.44.0
 google-generativeai==0.7.2          # Gemini API (primary)
 groq==1.2.0                         # Groq API (fallback)
 
-# Schema / Validation 
+# Validation 
 pydantic==2.7.4
 
 # Code Generation 
@@ -22,3 +22,5 @@ pytest-asyncio==0.23.7
 flake8==7.1.0
 markdownify==0.13.1
 autoflake==2.3.1
+pytest==8.2.2
+python-dotenv==1.0.1
