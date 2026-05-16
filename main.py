@@ -4,7 +4,6 @@ import logging
 import sys
 
 from dotenv import load_dotenv
-load_dotenv()
 
 from async_pipeline import process_batch
 from evaluation.metrics import (
@@ -134,6 +133,7 @@ def run_spec(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
     logger = setup_logger(
         "smart_api_tool", level=args.log_level, log_file=args.log_file
