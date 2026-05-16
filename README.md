@@ -50,6 +50,10 @@ python main.py \
 ### Spec file mode (OpenAPI)
 For deterministic parsing without an LLM:
 ```bash
+# First download the official Swagger Petstore Spec
+curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml -o tests/real_petstore_openapi.yaml
+
+# Run the spec parser
 python main.py \
   --spec tests/real_petstore_openapi.yaml \
   --log-level INFO

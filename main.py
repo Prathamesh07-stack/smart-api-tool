@@ -3,6 +3,9 @@ import asyncio
 import logging
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from async_pipeline import process_batch
 from evaluation.metrics import (
     LatencyTracker,

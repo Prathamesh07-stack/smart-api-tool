@@ -73,6 +73,16 @@ def generate_sdk(schema: APISchema, output_dir: str = "output") -> str:
     filename = _sanitize_filename(schema.title)
     output_path = os.path.abspath(os.path.join(output_dir, filename))
 
+    # Deduplicate endpoints to prevent F811 (redefinition of unused function)
+    seen_methods = set()
+    unique_endpoints = []
+    for ep in schema.endpoints:
+        m_name = format_method_name(ep.method, ep.path)
+        if m_name not in seen_methods:
+            seen_methods.add(m_name)
+            unique_endpoints.append(ep)
+    schema.endpoints = unique_endpoints
+
     rendered_code = template.render(schema=schema)
 
     with open(output_path, "w", encoding="utf-8") as f:
