@@ -41,3 +41,36 @@ To prove the tool is production-ready, we built a comprehensive, automated evalu
 1.  **Multi-Language Support**: Expanding the `Jinja2` engine to support generating TypeScript, Go, and Rust SDKs.
 2.  **Advanced Authentication**: Implementing complex OAuth2 handshakes dynamically within the generated Client class.
 3.  **Dynamic Crawling**: Expanding the scraper to automatically follow pagination links ("Next Page") to compile massive API documentation spanning multiple URLs.
+
+## Tokenization & Embedding Strategy
+
+### Scope Decision
+A full embedding/RAG pipeline with a vector database is out of scope for a 6-day prototype. Most real-world API documentation pages fit comfortably within modern LLM context windows (Gemini 2.5 Flash supports 1M tokens). For the remaining edge cases — extremely long paginated documentation — we use a **domain-aware chunking strategy** instead of naive hard truncation.
+
+### Domain-Specific Chunking (Implemented)
+`chunk_api_docs()` in `parser/llm_parser.py` implements a paragraph-based splitter with API-domain awareness:
+
+- Splits the scraped text on blank lines (`\n\n`) to preserve paragraph boundaries.
+- Builds chunks up to a `max_chars` limit (default: 7,000 characters).
+- Treats paragraphs containing high-signal API keywords (`GET`, `POST`, `/api`, `endpoint`, `auth`, `bearer`, `response`, `parameter`) as **priority paragraphs** — if the current chunk is under 50% capacity, these paragraphs are kept with the preceding context rather than flushed to a new chunk.
+
+This is "domain-specific" because generic prose chunkers (e.g. sentence splitters) would naively break an HTTP endpoint definition mid-way. By recognising API vocabulary, our chunker keeps semantically related lines together, giving the LLM better context per call.
+
+When a long document is detected, `parse_api_docs()` calls `_parse_chunked()` which:
+1. Sends each chunk to the LLM independently.
+2. Merges all returned `APISchema` objects.
+3. Deduplicates endpoints by `(path, method)` key.
+4. Computes the final `confidence_score` as the **average** of all per-chunk scores.
+
+### Future Embedding-Based Improvement
+For V2, a richer retrieval strategy could be added:
+1. Embed each paragraph using a lightweight model (e.g. `text-embedding-3-small` or `nomic-embed-text`).
+2. At parse time, compute cosine similarity between a fixed query ("API endpoints, HTTP methods, authentication, parameters") and all paragraph embeddings.
+3. Select only the top-K most relevant paragraphs before LLM extraction — replacing or augmenting `chunk_api_docs`.
+4. Optionally store embeddings in a lightweight vector store (e.g. ChromaDB) for repeated queries against the same documentation.
+
+### Confidence Score as Quality Proxy
+`APISchema.confidence_score` acts as a coarse extraction quality signal across chunks:
+- `1.0` = all endpoints have summaries, base URL is resolved, auth is detected.
+- Deducted for: missing base URL (`-0.2`), missing auth when "auth" appears in text (`-0.1`), ambiguous endpoint summaries (`-0.1` per endpoint), path parameters without corresponding `parameters` entries (`-0.1`).
+- In chunked mode, the final score is the **mean** of per-chunk scores, reflecting overall extraction quality across the full document.
