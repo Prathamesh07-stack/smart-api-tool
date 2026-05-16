@@ -15,6 +15,7 @@ from evaluation.metrics import (
 )
 from evaluation.smoke_test import smoke_test_sdk
 from generator.codegen import format_method_name, generate_sdk
+from parser.graphql_parser import parse_graphql_url
 from parser.llm_parser import parse_api_docs
 from parser.openapi_parser import parse_openapi_file
 from scraper.scraper import scrape
@@ -54,6 +55,17 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--graphql",
+        action="store_true",
+        help="Treat --url as a GraphQL endpoint and parse via introspection",
+    )
+    parser.add_argument(
+        "--graphql-key",
+        default="",
+        help="API key for authenticated GraphQL endpoints (sent as Bearer token)",
+    )
+
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -69,6 +81,24 @@ def parse_args() -> argparse.Namespace:
 def run_single(args: argparse.Namespace) -> None:
     logger = logging.getLogger("smart_api_tool")
     tracker = LatencyTracker()
+
+    if args.graphql:
+        logger.info("Mode: GraphQL introspection")
+        tracker.start("graphql_parse")
+        schema = parse_graphql_url(
+            args.url, api_key=args.graphql_key
+        )
+        tracker.stop("graphql_parse")
+        tracker.start("codegen")
+        sdk_path = generate_sdk(schema)
+        tracker.stop("codegen")
+        logger.info(f"Latency Report: {tracker.report()}")
+        cq_result = check_code_quality(sdk_path)
+        logger.info(
+            f"Code Quality: {cq_result['status']} "
+            f"({cq_result['issue_count']} issues)"
+        )
+        return
 
     tracker.start("scrape")
     text = scrape(
