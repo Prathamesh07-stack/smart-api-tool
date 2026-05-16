@@ -1,7 +1,9 @@
 import argparse
 import asyncio
 import logging
+import os
 import sys
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -12,7 +14,7 @@ from evaluation.metrics import (
     compute_extraction_accuracy,
 )
 from evaluation.smoke_test import smoke_test_sdk
-from generator.codegen import generate_sdk
+from generator.codegen import format_method_name, generate_sdk
 from parser.llm_parser import parse_api_docs
 from parser.openapi_parser import parse_openapi_file
 from scraper.scraper import scrape
@@ -92,14 +94,35 @@ def run_single(args: argparse.Namespace) -> None:
     )
 
     if args.evaluate:
-        gt_path = "tests/ground_truth/jsonplaceholder.yaml"
-        metrics = compute_extraction_accuracy(schema, gt_path)
-        logger.info(f"Evaluation Metrics: {metrics}")
+        domain = urlparse(args.url).netloc.split(".")[0]
+        gt_path = f"tests/ground_truth/{domain}.yaml"
+        if os.path.exists(gt_path):
+            metrics = compute_extraction_accuracy(schema, gt_path)
+            logger.info(f"Evaluation Metrics: {metrics}")
+        else:
+            logger.info(
+                f"No ground truth file found for '{domain}', "
+                "skipping evaluation."
+            )
 
     if args.smoke_test:
-        test_calls = [("get_posts", {}), ("get_users", {})]
-        smoke_result = smoke_test_sdk(sdk_path, test_calls)
-        logger.info(f"Smoke Test Summary: {smoke_result}")
+        # Autonomously discover safe GET endpoints with no required params
+        safe_calls = []
+        for ep in schema.endpoints:
+            if ep.method == "GET" and not any(
+                p.required for p in ep.parameters
+            ):
+                method_name = format_method_name(ep.method, ep.path)
+                safe_calls.append((method_name, {}))
+            if len(safe_calls) >= 2:
+                break
+        if safe_calls:
+            smoke_result = smoke_test_sdk(sdk_path, safe_calls)
+            logger.info(f"Smoke Test Summary: {smoke_result}")
+        else:
+            logger.info(
+                "No safe GET endpoints found for smoke testing, skipping."
+            )
 
 
 def run_batch(args: argparse.Namespace) -> None:

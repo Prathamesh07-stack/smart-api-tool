@@ -35,17 +35,17 @@ pip install -r requirements.txt
 ```bash
 python main.py \
   --url https://jsonplaceholder.typicode.com/ \
+  --playwright \
   --evaluate \
   --smoke-test \
   --log-level INFO
 ```
 **Expected Output**:
 - Logs for checking `robots.txt`, Scraping, and Parsing.
-- `Found endpoints. Confidence 1.0`
-- SDK saved to `output/jsonplaceholder_sdk.py`.
+- SDK saved to `output/jsonplaceholder_api_sdk.py`.
 - Full Latency Tracker report.
-- Evaluation metrics (Precision, Recall, F1).
-- Smoke test summary (e.g., `passed 6 / total 6 endpoints`).
+- Evaluation metrics (Precision, Recall, F1) if a ground truth file exists, or a friendly skip message.
+- Smoke test auto-discovers and fires the first 2 safe GET endpoints.
 
 ### Spec file mode (OpenAPI)
 For deterministic parsing without an LLM:
@@ -86,29 +86,35 @@ flake8 .
 
 If you want to demo this tool in a cloud environment without setting anything up locally, open a new Google Colab notebook and run the following cells:
 
-**1. Clone and Install**
+**1. Clone and Install (Universal Setup)**
 ```python
 !git clone https://github.com/Prathamesh07-stack/smart-api-tool.git
 %cd smart-api-tool
 !pip install -r requirements.txt
+!playwright install chromium
+!playwright install-deps
 ```
 
-**2. Run Tests**
+**2. Run MVP Tests**
 ```python
 !PYTHONPATH=. pytest tests/ -v
 ```
 *(Expected: All tests show PASSED in the output)*
 
-**3. Run the End-to-End Demo**
+**3. Run the End-to-End Demo (Dynamic URL)**
 ```python
-# Make sure to set your API key in Colab secrets first!
+# Please replace the placeholders below with your own API keys!
 import os
-os.environ["GEMINI_API_KEY"] = "your_key_here"
+os.environ["GEMINI_API_KEY"] = "your_gemini_key_here"
+os.environ["GROQ_API_KEY"] = "your_groq_key_here"
 
+# Universal command - works for ANY URL!
+# Just change the URL below. Add --playwright for JavaScript-heavy sites like Stripe.
 !python main.py \
   --url https://jsonplaceholder.typicode.com/ \
+  --playwright \
   --evaluate \
   --smoke-test \
   --log-level INFO
 ```
-*(Expected: Structured logs, evaluation metrics, and the generated SDK file appearing in the Colab file explorer under `output/`)*
+*(Expected: Structured logs, auto-discovered smoke tests, and the generated SDK file appearing in the Colab file explorer under `output/`)*
