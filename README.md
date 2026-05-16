@@ -4,7 +4,7 @@ Smart API Tool is an autonomous, production-ready pipeline that dynamically conv
 
 ## Architecture
 
-![Architecture Diagram](Architecture-Diagram.png)
+![Architecture Diagram](Architecture%20Diagram.png)
 
 The tool processes documentation through a 5-tier pipeline:
 1. **Scraping**: Fetches static HTML or renders JavaScript-heavy sites via Playwright, respecting `robots.txt`.

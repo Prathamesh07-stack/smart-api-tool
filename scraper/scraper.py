@@ -116,7 +116,23 @@ def scrape_with_pagination(base_url, max_pages=5):
     return "\n\n---PAGE BREAK---\n\n".join(texts)
 
 
+def is_graphql_endpoint(url: str) -> bool:
+    """Heuristic check for common GraphQL endpoint URL patterns."""
+    clean = url.rstrip("/")
+    return (
+        clean.endswith("/graphql")
+        or "/graphql/" in clean
+        or "/api/graphql" in clean
+    )
+
+
 def scrape(url, use_playwright=False, follow_links=False, max_pages=5):
+    if is_graphql_endpoint(url):
+        logger.warning(
+            "Detected GraphQL-style endpoint %s. "
+            "Consider using --graphql mode for introspection-based parsing.",
+            url,
+        )
     if follow_links:
         return scrape_with_pagination(url, max_pages)
     elif use_playwright:

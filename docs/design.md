@@ -5,7 +5,7 @@ Developers spend countless hours manually writing API integration code, models, 
 
 ## Architecture
 
-![Architecture Diagram](../Architecture-Diagram.png)
+![Architecture Diagram](../Architecture%20Diagram.png)
 
 ## Key Decisions
 
