@@ -153,9 +153,74 @@ def compute_confidence(schema: APISchema, raw_text: str) -> float:
     return max(0.1, round(score, 2))
 
 
+# High-signal API patterns — keep these paragraphs together in chunks
+_API_SIGNALS = (
+    "GET ", "POST ", "PUT ", "DELETE ", "PATCH ",
+    "/api", "endpoint", "parameter", "auth",
+    "bearer", "response",
+)
+
+
+def chunk_api_docs(text: str, max_chars: int = 7000) -> list:
+    """Split long API documentation into domain-aware chunks.
+
+    Splits on blank lines (paragraph boundaries) so API-relevant blocks
+    (HTTP methods, paths, auth, parameters) are kept together within a chunk
+    rather than cut mid-context. Chunks never exceed max_chars characters.
+    """
+    paragraphs = text.split("\n\n")
+    chunks = []
+    current: list = []
+    current_len = 0
+
+    for para in paragraphs:
+        is_api_relevant = any(sig in para for sig in _API_SIGNALS)
+        para_len = len(para) + 2  # +2 for the \n\n separator
+
+        # If adding this paragraph would exceed the limit, flush the current chunk
+        if current_len + para_len > max_chars and current:
+            # But if this paragraph is API-relevant and the chunk is small,
+            # keep it together to avoid losing context
+            if is_api_relevant and current_len < max_chars * 0.5:
+                current.append(para)
+                current_len += para_len
+                continue
+            chunks.append("\n\n".join(current))
+            current = []
+            current_len = 0
+
+        current.append(para)
+        current_len += para_len
+
+    if current:
+        chunks.append("\n\n".join(current))
+
+    return chunks
+
+
 def parse_api_docs(text: str) -> APISchema:
-    """Extract APISchema from documentation text using LLMs."""
+    """Extract APISchema from documentation text using LLMs.
+
+    For short docs (<= 7000 chars): single LLM call.
+    For long docs (> 7000 chars): splits into domain-aware chunks,
+    calls the LLM per chunk, then merges and deduplicates endpoints.
+    Policy: if a chunk fails, log the error and continue with others.
+    """
     logger.info("Starting LLM parsing of API documentation")
+
+    if len(text) > 7000:
+        chunks = chunk_api_docs(text)
+        logger.info(
+            "Long API doc detected: split into %d chunks for LLM parsing",
+            len(chunks),
+        )
+        return _parse_chunked(text, chunks)
+
+    return _parse_single(text)
+
+
+def _parse_single(text: str) -> APISchema:
+    """Single LLM call for short documents."""
     raw_response = _call_llm(SYSTEM_PROMPT, text)
 
     try:
@@ -164,25 +229,23 @@ def parse_api_docs(text: str) -> APISchema:
         schema = APISchema(**data)
         schema.confidence_score = compute_confidence(schema, text)
 
-        # Trigger Fallback Heuristic if score is too low
         if schema.confidence_score < 0.6:
-            raise ValueError(f"Confidence too low ({schema.confidence_score}). Triggering fallback.")
+            raise ValueError(
+                f"Confidence too low ({schema.confidence_score}). "
+                "Triggering fallback."
+            )
 
-        logger.info(
-            f"Parsed docs with confidence {schema.confidence_score}"
-        )
+        logger.info(f"Parsed docs with confidence {schema.confidence_score}")
         return schema
 
     except (json.JSONDecodeError, ValidationError) as e:
         logger.error(f"Initial parse failed: {e}. Retrying.")
-
-        # Retry once with stricter instructions
         retry_prompt = f"{SYSTEM_PROMPT}\n{STRICT_PROMPT}"
-        raw_response_retry = _call_llm(retry_prompt, text)
+        raw_retry = _call_llm(retry_prompt, text)
 
         try:
-            clean_text_retry = _clean_json_string(raw_response_retry)
-            data_retry = json.loads(clean_text_retry)
+            clean_retry = _clean_json_string(raw_retry)
+            data_retry = json.loads(clean_retry)
             schema = APISchema(**data_retry)
             schema.confidence_score = compute_confidence(schema, text)
             logger.info(
@@ -192,7 +255,6 @@ def parse_api_docs(text: str) -> APISchema:
 
         except Exception as retry_e:
             logger.error(f"Retry also failed: {retry_e}. Building partial.")
-            # Option 2 from spec: Build a partial schema with 0.1 confidence
             return APISchema(
                 title="Unknown API",
                 base_url="",
@@ -200,6 +262,61 @@ def parse_api_docs(text: str) -> APISchema:
                 confidence_score=0.1,
                 extraction_notes=[
                     "Extraction failed completely.",
-                    str(retry_e)
-                ]
+                    str(retry_e),
+                ],
             )
+
+
+def _parse_chunked(original_text: str, chunks: list) -> APISchema:
+    """Parse each chunk independently and merge results.
+
+    Policy: errors on individual chunks are logged and skipped so a single
+    bad chunk cannot block extraction from the rest of the document.
+    """
+    schemas = []
+    for i, chunk in enumerate(chunks):
+        try:
+            logger.info("Parsing chunk %d/%d", i + 1, len(chunks))
+            schema = _parse_single(chunk)
+            schemas.append(schema)
+        except Exception as exc:
+            logger.warning(
+                "Chunk %d/%d failed: %s \u2014 skipping.", i + 1, len(chunks), exc
+            )
+
+    if not schemas:
+        return APISchema(
+            title="Unknown API",
+            base_url="",
+            endpoints=[],
+            confidence_score=0.1,
+            extraction_notes=["All chunks failed during LLM parsing."],
+        )
+
+    # Use title/base_url/auth from the first successful schema
+    merged = schemas[0]
+
+    # Merge and deduplicate endpoints across all chunk schemas
+    seen = {(ep.path, ep.method) for ep in merged.endpoints}
+    for schema in schemas[1:]:
+        for ep in schema.endpoints:
+            key = (ep.path, ep.method)
+            if key not in seen:
+                seen.add(key)
+                merged.endpoints.append(ep)
+
+    # Confidence = average of per-chunk scores (explicit heuristic)
+    merged.confidence_score = round(
+        sum(s.confidence_score for s in schemas) / len(schemas), 2
+    )
+    merged.extraction_notes.append(
+        f"Parsed from {len(chunks)} chunks; {len(schemas)} succeeded."
+    )
+
+    logger.info(
+        "Merged %d chunks into %d unique endpoints (confidence: %s)",
+        len(schemas),
+        len(merged.endpoints),
+        merged.confidence_score,
+    )
+    return merged
