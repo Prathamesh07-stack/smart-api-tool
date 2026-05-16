@@ -66,6 +66,14 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--lang",
+        type=str,
+        default="python",
+        choices=["python", "javascript"],
+        help="Target SDK language: python (default) or javascript",
+    )
+
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -90,7 +98,7 @@ def run_single(args: argparse.Namespace) -> None:
         )
         tracker.stop("graphql_parse")
         tracker.start("codegen")
-        sdk_path = generate_sdk(schema)
+        sdk_path = generate_sdk(schema, language=args.lang)
         tracker.stop("codegen")
         logger.info(f"Latency Report: {tracker.report()}")
         cq_result = check_code_quality(sdk_path)
@@ -111,7 +119,7 @@ def run_single(args: argparse.Namespace) -> None:
     tracker.stop("llm_parse")
 
     tracker.start("codegen")
-    sdk_path = generate_sdk(schema)
+    sdk_path = generate_sdk(schema, language=args.lang)
     tracker.stop("codegen")
 
     stage_times = tracker.report()
@@ -170,7 +178,7 @@ def run_batch(args: argparse.Namespace) -> None:
 def run_spec(args: argparse.Namespace) -> None:
     logger = logging.getLogger("smart_api_tool")
     schema = parse_openapi_file(args.spec)
-    sdk_path = generate_sdk(schema)
+    sdk_path = generate_sdk(schema, language=args.lang)
 
     logger.info(
         f"Parsed OpenAPI Spec: {schema.title} "
