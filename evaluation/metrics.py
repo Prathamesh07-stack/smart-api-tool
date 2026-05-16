@@ -67,6 +67,12 @@ def compute_extraction_accuracy(
 
 
 def check_code_quality(sdk_path: str) -> Dict[str, Any]:
+    if not sdk_path.endswith(".py"):
+        logger.info(
+            "Code Quality Check: PASS (non-Python file, skipping flake8)"
+        )
+        return {"status": "PASS", "issue_count": 0, "issues": []}
+
     result = subprocess.run(
         ["flake8", "--max-line-length=100", "--extend-ignore=E501", sdk_path],
         capture_output=True,

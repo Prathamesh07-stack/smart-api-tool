@@ -9,7 +9,7 @@ import requests
 from typing import Any, Dict, Optional
 
 
-class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') | replace('.', '') }}Client:
+class {{ class_name }}:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
         Initialize the {{ schema.title }} client.
@@ -38,12 +38,23 @@ class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') |
     ) -> Any:
         """
         {{ endpoint.summary or endpoint.path }}
-        
+
         {% for param in endpoint.parameters %}
         :param {{ param.name | safe_param_name }}: {{ param.description or "No description provided." }}
         {% endfor %}
         :returns: {{ endpoint.response_description or "Parsed JSON response." }}
         :raises RuntimeError: If the HTTP request fails.
+
+        Example::
+
+            >>> client = {{ class_name }}()
+            >>> result = client.{{ endpoint.method | format_method_name(endpoint.path) }}(
+            {%- set req = endpoint.parameters | selectattr('required') | list -%}
+            {%- for p in req -%}
+                {{ p.name | safe_param_name }}="example"{% if not loop.last %}, {% endif %}
+            {%- endfor -%}
+            )
+            >>> print(result)
         """
         {% for param in endpoint.parameters %}
         {% if param.required %}
@@ -117,3 +128,14 @@ class {{ schema.title | replace(' ', '') | replace('-', '') | replace('_', '') |
             return response.text
 
 {% endfor %}
+
+
+if __name__ == "__main__":
+    client = {{ class_name }}()
+    {% if schema.endpoints %}
+    # Quick smoke test — calls the first available endpoint
+    result = client.{{ first_method_name }}()
+    print("Response:", result)
+    {% else %}
+    print("No endpoints available in this SDK.")
+    {% endif %}
