@@ -41,6 +41,7 @@ To prove the tool is production-ready, we built a comprehensive, automated evalu
 1.  **Multi-Language Support**: Expanding the `Jinja2` engine to support generating TypeScript, Go, and Rust SDKs.
 2.  **Advanced Authentication**: Implementing complex OAuth2 handshakes dynamically within the generated Client class.
 3.  **Dynamic Crawling**: Expanding the scraper to automatically follow pagination links ("Next Page") to compile massive API documentation spanning multiple URLs.
+4.  **Multi-Language UI / CLI**: The interactive CLI and any UI layer are architected so they can be implemented in languages and runtimes beyond Python and JavaScript (for example, a TypeScript/React web UI, a Rust CLI, or a small Go wrapper). The generator and templates can be extended to emit language-specific templates and wiring to support those interfaces.
 
 ## Tokenization & Embedding Strategy
 
