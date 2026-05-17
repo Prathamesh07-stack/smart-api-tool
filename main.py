@@ -98,9 +98,14 @@ def interactive_refinement(schema: APISchema) -> APISchema:
         print(f"[{i+1}] {ep.method} {ep.path} — {ep.summary}")
 
     print()
-    endpoints_input = input(
-        "Press ENTER to accept all endpoints,\nor type endpoint numbers to remove (e.g. 1,3,5): "
-    )
+    try:
+        endpoints_input = input(
+            "Press ENTER to accept all endpoints,\nor type endpoint numbers to remove (e.g. 1,3,5): "
+        )
+    except (KeyboardInterrupt, EOFError):
+        print("(Interrupted: keeping all endpoints)")
+        endpoints_input = ""
+
     if endpoints_input.strip():
         try:
             to_remove = [
@@ -114,23 +119,37 @@ def interactive_refinement(schema: APISchema) -> APISchema:
             print("Invalid input, keeping all endpoints.")
 
     print()
-    base_url_input = input(
-        f"Edit base URL? Current: {schema.base_url}\nNew value (ENTER to keep): "
-    )
+    try:
+        base_url_input = input(
+            f"Edit base URL? Current: {schema.base_url}\nNew value (ENTER to keep): "
+        )
+    except (KeyboardInterrupt, EOFError):
+        print("(Interrupted: keeping current base URL)")
+        base_url_input = ""
+
     if base_url_input.strip():
         schema.base_url = base_url_input.strip()
 
     print()
-    auth_input = input(
-        f"Auth type detected: {schema.auth.type}\nChange? (bearer/api_key/none, ENTER to keep): "
-    )
+    try:
+        auth_input = input(
+            f"Auth type detected: {schema.auth.type}\nChange? (bearer/api_key/none, ENTER to keep): "
+        )
+    except (KeyboardInterrupt, EOFError):
+        print("(Interrupted: keeping current auth type)")
+        auth_input = ""
+
     auth_input = auth_input.strip().lower()
     if auth_input in ("bearer", "api_key", "none"):
         schema.auth.type = auth_input
         if auth_input == "bearer":
             schema.auth.header_name = "Authorization"
         elif auth_input == "api_key":
-            header_input = input("Enter header name for API key: ")
+            try:
+                header_input = input("Enter header name for API key: ")
+            except (KeyboardInterrupt, EOFError):
+                print("(Interrupted: keeping default header)")
+                header_input = ""
             if header_input.strip():
                 schema.auth.header_name = header_input.strip()
 
