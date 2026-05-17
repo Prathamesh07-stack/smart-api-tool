@@ -29,64 +29,139 @@ pip install -r requirements.txt
 
 *(Ensure you have your `.env` file populated with `GEMINI_API_KEY` and `GROQ_API_KEY`)*
 
-## Running the tool locally
+Create a `.env` file at the project root with your API keys before running the tool. Example:
 
-### Single URL (JSONPlaceholder)
 ```bash
-python main.py \
-  --url https://jsonplaceholder.typicode.com/ \
-  --playwright \
-  --evaluate \
-  --smoke-test \
-  --log-level INFO
+# .env example
+GEMINI_API_KEY=your_gemini_key_here
+GROQ_API_KEY=your_groq_key_here
 ```
-**Expected Output**:
-- Logs for checking `robots.txt`, Scraping, and Parsing.
-- SDK saved to `output/jsonplaceholder_api_sdk.py`.
-- Full Latency Tracker report.
-- Evaluation metrics (Precision, Recall, F1) if a ground truth file exists, or a friendly skip message.
-- Smoke test auto-discovers and fires the first 2 safe GET endpoints.
 
-### Spec file mode (OpenAPI)
-For deterministic parsing without an LLM:
+## Running the tool locally (ordered flow)
+
+Follow this exact flow when running locally from the repo root. Replace API keys where noted.
+
+1) Run the test suite first
+
 ```bash
-# First download the official Swagger Petstore Spec
-curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml -o tests/real_petstore_openapi.yaml
+# Create + activate virtualenv (macOS / Linux)
+python -m venv .venv
+source .venv/bin/activate
 
-# Run the spec parser
-python main.py \
-  --spec tests/real_petstore_openapi.yaml \
-  --log-level INFO
-```
-**Expected Output**: Instant parsing of the OpenAPI schema and lightning-fast SDK generation.
+# Install deps and Playwright
+pip install -r requirements.txt
+playwright install chromium
+playwright install-deps
 
-### Batch mode (Async Pipeline)
-```bash
-python main.py \
-  --urls https://jsonplaceholder.typicode.com/ https://docs.stripe.com/api/customers \
-  --log-level INFO
-```
-**Expected Output**: One log line per URL processing concurrently via `asyncio`, handling success/failure states seamlessly.
-
-## Running tests locally
-
-Run the entire MVP test suite (Scraper, Parser, Codegen, Evaluation):
-```bash
+# Run tests
 PYTHONPATH=. pytest tests/ -v
 ```
-*(All tests should pass natively)*
 
-Run Code Quality / Linting checks:
+2) Main URL checks
+
+Python (generate Python SDK):
+
 ```bash
-flake8 .
+# Main URL check with Python as target SDK language
+python main.py \
+  --url https://jsonplaceholder.typicode.com/ \
+  --interactive \
+  --lang python \
+  --log-level INFO
 ```
-*(Flake8 should show absolutely no output, meaning 0 errors repository-wide)*
 
-## Running in Google Colab
+JavaScript (generate JS SDK):
 
-If you want to demo this tool in a cloud environment without setting anything up locally, open a new Google Colab notebook and run the following cells:
+```bash
+# Main URL check with JavaScript as target SDK language
+python main.py \
+  --url https://jsonplaceholder.typicode.com/ \
+  --interactive \
+  --lang javascript \
+  --log-level INFO
+```
 
-**1. Clone and Install (Universal Setup)**
+3) GraphQL URL checks
+
+Python (GraphQL introspection):
+
+```bash
+# GraphQL URL check with Python as target SDK language
+python main.py \
+  --url https://countries.trevorblades.com/ \
+  --graphql \
+  --lang python \
+  --log-level INFO
+```
+
+JavaScript (GraphQL introspection):
+
+```bash
+# GraphQL URL check with JavaScript as target SDK language
+python main.py \
+  --url https://countries.trevorblades.com/ \
+  --graphql \
+  --lang javascript \
+  --log-level INFO
+```
+
+4) Local OpenAPI / YAML spec parsing
+
+Python (spec -> Python SDK):
+
+```bash
+# YAML/OpenAPI parser check with Python as target SDK language
+curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml \
+  -o tests/real_petstore_openapi.yaml
+
+python main.py \
+  --spec tests/real_petstore_openapi.yaml \
+  --lang python \
+  --log-level INFO
+```
+
+JavaScript (spec -> JS SDK):
+
+```bash
+# YAML/OpenAPI parser check with JavaScript as target SDK language
+curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml \
+  -o tests/real_petstore_openapi.yaml
+
+python main.py \
+  --spec tests/real_petstore_openapi.yaml \
+  --lang javascript \
+  --log-level INFO
+```
+
+5) Async / batch processing (use the provided URLs)
+
+```bash
+# Async batch URL check with Playwright
+python main.py \
+  --urls https://docs.github.com/en/rest/users/users https://docs.stripe.com/api/customers \
+  --playwright \
+  --log-level INFO
+```
+
+6) robots.txt denial check (legality check)
+
+```bash
+# robots.txt legality check for crawl allowance/disallowance
+python main.py \
+  --url https://reqres.in/ \
+  --log-level INFO
+```
+
+Expected: if the site disallows crawling the given path the run will log a robots.txt warning and the scraper will raise a `PermissionError` (the pipeline halts).
+
+---
+
+## Running in Google Colab (ordered flow)
+
+Paste each block below into its own Colab cell. Replace API keys where noted.
+
+1) Clone and install
+
 ```python
 !git clone https://github.com/Prathamesh07-stack/smart-api-tool.git
 %cd smart-api-tool
@@ -95,26 +170,113 @@ If you want to demo this tool in a cloud environment without setting anything up
 !playwright install-deps
 ```
 
-**2. Run MVP Tests**
+2) Run tests
+
 ```python
 !PYTHONPATH=. pytest tests/ -v
 ```
-*(Expected: All tests show PASSED in the output)*
 
-**3. Run the End-to-End Demo (Dynamic URL)**
+
+3) Set LLM keys once for Colab runtime
+
+Run this once after tests. Subsequent `!python` shell commands in the same runtime will inherit these variables.
+
 ```python
-# Please replace the placeholders below with your own API keys!
 import os
-os.environ["GEMINI_API_KEY"] = "your_gemini_key_here"
-os.environ["GROQ_API_KEY"] = "your_groq_key_here"
 
-# Universal command - works for ANY URL!
-# Just change the URL below. Add --playwright for JavaScript-heavy sites like Stripe.
+os.environ['GEMINI_API_KEY'] = 'paste_your_gemini_key_here'
+os.environ['GROQ_API_KEY'] = 'paste_your_groq_key_here'
+
+print('GEMINI_API_KEY loaded:', bool(os.environ.get('GEMINI_API_KEY')))
+```
+
+4) Main URL checks (Python)
+
+```python
+# Main URL check with Python as target SDK language
 !python main.py \
   --url https://jsonplaceholder.typicode.com/ \
-  --playwright \
-  --evaluate \
-  --smoke-test \
+  --interactive \
+  --lang python \
   --log-level INFO
 ```
-*(Expected: Structured logs, auto-discovered smoke tests, and the generated SDK file appearing in the Colab file explorer under `output/`)*
+
+Main URL checks (JavaScript)
+
+```python
+# Main URL check with JavaScript as target SDK language
+!python main.py \
+  --url https://jsonplaceholder.typicode.com/ \
+  --interactive \
+  --lang javascript \
+  --log-level INFO
+```
+
+5) GraphQL checks (Python)
+
+```python
+# GraphQL URL check with Python as target SDK language
+!python main.py \
+  --url https://countries.trevorblades.com/ \
+  --graphql \
+  --lang python \
+  --log-level INFO
+```
+
+GraphQL checks (JavaScript)
+
+```python
+# GraphQL URL check with JavaScript as target SDK language
+!python main.py \
+  --url https://countries.trevorblades.com/ \
+  --graphql \
+  --lang javascript \
+  --log-level INFO
+```
+
+6) YAML / OpenAPI spec (Python)
+
+```python
+# YAML/OpenAPI parser check with Python as target SDK language
+!curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml \
+  -o tests/real_petstore_openapi.yaml
+!python main.py \
+  --spec tests/real_petstore_openapi.yaml \
+  --lang python \
+  --log-level INFO
+```
+
+YAML / OpenAPI spec (JavaScript)
+
+```python
+# YAML/OpenAPI parser check with JavaScript as target SDK language
+!curl -sL https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml \
+  -o tests/real_petstore_openapi.yaml
+!python main.py \
+  --spec tests/real_petstore_openapi.yaml \
+  --lang javascript \
+  --log-level INFO
+```
+
+7) Async / batch (Colab)
+
+```python
+# Async batch URL check with Playwright
+!python main.py \
+  --urls https://docs.github.com/en/rest/users/users https://docs.stripe.com/api/customers \
+  --playwright \
+  --log-level INFO
+```
+
+8) robots.txt denial check (Colab)
+
+```python
+# robots.txt legality check for crawl allowance/disallowance
+!python main.py \
+  --url https://reqres.in/ \
+  --log-level INFO
+```
+
+---
+
+

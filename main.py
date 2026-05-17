@@ -17,6 +17,7 @@ from evaluation.smoke_test import smoke_test_sdk
 from generator.codegen import format_method_name, generate_sdk
 from parser.graphql_parser import parse_graphql_url
 from parser.llm_parser import parse_api_docs
+from parser.models import APISchema
 from parser.openapi_parser import parse_openapi_file
 from scraper.scraper import scrape
 from utils.logger import setup_logger
@@ -24,18 +25,14 @@ from utils.logger import setup_logger
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smart API Tool Orchestrator")
-    parser.add_argument(
-        "--url", type=str, help="Single URL to scrape and parse"
-    )
+    parser.add_argument("--url", type=str, help="Single URL to scrape and parse")
     parser.add_argument(
         "--urls",
         type=str,
         nargs="+",
         help="One or more URLs for batch processing",
     )
-    parser.add_argument(
-        "--spec", type=str, help="Path to OpenAPI YAML/JSON file"
-    )
+    parser.add_argument("--spec", type=str, help="Path to OpenAPI YAML/JSON file")
 
     parser.add_argument(
         "--playwright", action="store_true", help="Use Playwright for scraping"
@@ -52,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         "--smoke-test",
         action="store_true",
         help="Run dynamic smoke tests against generated SDK",
+    )
+
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Review and refine extracted API schema before generating SDK",
     )
 
     parser.add_argument(
@@ -79,11 +82,62 @@ def parse_args() -> argparse.Namespace:
         default="INFO",
         help="Logging level (e.g. INFO, DEBUG)",
     )
-    parser.add_argument(
-        "--log-file", type=str, help="Optional file to write logs to"
-    )
+    parser.add_argument("--log-file", type=str, help="Optional file to write logs to")
 
     return parser.parse_args()
+
+
+def interactive_refinement(schema: APISchema) -> APISchema:
+    print(f'\nExtracted {len(schema.endpoints)} endpoints from "{schema.title}"')
+    print(f"Confidence score: {schema.confidence_score}")
+    if schema.confidence_score < 0.7:
+        print("WARNING: Low confidence extraction. Please review endpoints carefully.")
+
+    print("\n--- Endpoints ---")
+    for i, ep in enumerate(schema.endpoints):
+        print(f"[{i+1}] {ep.method} {ep.path} — {ep.summary}")
+
+    print()
+    endpoints_input = input(
+        "Press ENTER to accept all endpoints,\nor type endpoint numbers to remove (e.g. 1,3,5): "
+    )
+    if endpoints_input.strip():
+        try:
+            to_remove = [
+                int(x.strip()) for x in endpoints_input.split(",") if x.strip()
+            ]
+            new_endpoints = [
+                ep for i, ep in enumerate(schema.endpoints) if (i + 1) not in to_remove
+            ]
+            schema.endpoints = new_endpoints
+        except ValueError:
+            print("Invalid input, keeping all endpoints.")
+
+    print()
+    base_url_input = input(
+        f"Edit base URL? Current: {schema.base_url}\nNew value (ENTER to keep): "
+    )
+    if base_url_input.strip():
+        schema.base_url = base_url_input.strip()
+
+    print()
+    auth_input = input(
+        f"Auth type detected: {schema.auth.type}\nChange? (bearer/api_key/none, ENTER to keep): "
+    )
+    auth_input = auth_input.strip().lower()
+    if auth_input in ("bearer", "api_key", "none"):
+        schema.auth.type = auth_input
+        if auth_input == "bearer":
+            schema.auth.header_name = "Authorization"
+        elif auth_input == "api_key":
+            header_input = input("Enter header name for API key: ")
+            if header_input.strip():
+                schema.auth.header_name = header_input.strip()
+
+    print(
+        f'\nProceeding with {len(schema.endpoints)} endpoints from "{schema.title}" (base URL: {schema.base_url}, auth: {schema.auth.type})\n'
+    )
+    return schema
 
 
 def run_single(args: argparse.Namespace) -> None:
@@ -93,10 +147,12 @@ def run_single(args: argparse.Namespace) -> None:
     if args.graphql:
         logger.info("Mode: GraphQL introspection")
         tracker.start("graphql_parse")
-        schema = parse_graphql_url(
-            args.url, api_key=args.graphql_key
-        )
+        schema = parse_graphql_url(args.url, api_key=args.graphql_key)
         tracker.stop("graphql_parse")
+
+        if args.interactive:
+            schema = interactive_refinement(schema)
+
         tracker.start("codegen")
         sdk_path = generate_sdk(schema, language=args.lang)
         tracker.stop("codegen")
@@ -118,6 +174,9 @@ def run_single(args: argparse.Namespace) -> None:
     schema = parse_api_docs(text)
     tracker.stop("llm_parse")
 
+    if args.interactive:
+        schema = interactive_refinement(schema)
+
     tracker.start("codegen")
     sdk_path = generate_sdk(schema, language=args.lang)
     tracker.stop("codegen")
@@ -127,8 +186,7 @@ def run_single(args: argparse.Namespace) -> None:
 
     cq_result = check_code_quality(sdk_path)
     logger.info(
-        f"Code Quality: {cq_result['status']} "
-        f"({cq_result['issue_count']} issues)"
+        f"Code Quality: {cq_result['status']} " f"({cq_result['issue_count']} issues)"
     )
 
     if args.evaluate:
@@ -139,17 +197,14 @@ def run_single(args: argparse.Namespace) -> None:
             logger.info(f"Evaluation Metrics: {metrics}")
         else:
             logger.info(
-                f"No ground truth file found for '{domain}', "
-                "skipping evaluation."
+                f"No ground truth file found for '{domain}', " "skipping evaluation."
             )
 
     if args.smoke_test:
         # Autonomously discover safe GET endpoints with no required params
         safe_calls = []
         for ep in schema.endpoints:
-            if ep.method == "GET" and not any(
-                p.required for p in ep.parameters
-            ):
+            if ep.method == "GET" and not any(p.required for p in ep.parameters):
                 method_name = format_method_name(ep.method, ep.path)
                 safe_calls.append((method_name, {}))
             if len(safe_calls) >= 2:
@@ -158,9 +213,7 @@ def run_single(args: argparse.Namespace) -> None:
             smoke_result = smoke_test_sdk(sdk_path, safe_calls)
             logger.info(f"Smoke Test Summary: {smoke_result}")
         else:
-            logger.info(
-                "No safe GET endpoints found for smoke testing, skipping."
-            )
+            logger.info("No safe GET endpoints found for smoke testing, skipping.")
 
 
 def run_batch(args: argparse.Namespace) -> None:
@@ -181,8 +234,7 @@ def run_spec(args: argparse.Namespace) -> None:
     sdk_path = generate_sdk(schema, language=args.lang)
 
     logger.info(
-        f"Parsed OpenAPI Spec: {schema.title} "
-        f"({len(schema.endpoints)} endpoints)"
+        f"Parsed OpenAPI Spec: {schema.title} " f"({len(schema.endpoints)} endpoints)"
     )
     logger.info(f"Generated SDK path: {sdk_path}")
 
@@ -208,8 +260,7 @@ def main() -> None:
         run_spec(args)
     else:
         logger.error(
-            "Missing required input. "
-            "Must provide --url, --urls, or --spec."
+            "Missing required input. " "Must provide --url, --urls, or --spec."
         )
         sys.exit(1)
 
